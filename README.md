@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hammas159/deep-research-agent/actions/workflows/ci.yml"><img src="https://github.com/hammas159/deep-research-agent/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
+  <a href="https://github.com/hammasbuilds/deep-research-agent/actions/workflows/ci.yml"><img src="https://github.com/hammasbuilds/deep-research-agent/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="python">
   <img src="https://img.shields.io/badge/core%20deps-zero-success" alt="deps">
   <img src="https://img.shields.io/badge/testable-no%20network%2C%20no%20model-informational" alt="tested">
@@ -217,7 +217,7 @@ MIT
 ## Run it yourself
 
 ```bash
-git clone https://github.com/hammas159/deep-research-agent
+git clone https://github.com/hammasbuilds/deep-research-agent
 cd deep-research-agent
 
 pip install -e .         # core has zero dependencies
