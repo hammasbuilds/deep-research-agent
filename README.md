@@ -2,12 +2,11 @@
 <p align="center"><i>A research agent that tells you when the sources disagree, instead of picking one</i></p>
 
 <p align="center">
-  <a href="#three-things-most-research-agents-get-wrong">Three things</a> &middot;
+  <a href="#what-it-does">Three things</a> &middot;
   <a href="#the-budget-is-outside-the-loop">The budget</a> &middot;
   <a href="#source-authority">Source authority</a> &middot;
   <a href="#usage">Usage</a> &middot;
-  <a href="#limits">Limits</a> &middot;
-  <a href="#problems-hit-while-building-this">Problems hit</a>
+  <a href="#limits">Limits</a> 
 </p>
 
 <p align="center">
@@ -20,7 +19,7 @@
 
 ---
 
-## Three things most research agents get wrong
+## What it does
 
 ```mermaid
 flowchart LR
@@ -66,7 +65,7 @@ Claims are extracted from the representative only. Extracting from every copy wo
 one story contribute the same claim a dozen times and manufacture exactly the
 corroboration deduplication just removed. That's a test.
 
-### 2. Disagreement is the finding, not a problem to resolve
+### 2. Disagreement is reported, not resolved
 
 A typical agent feeds every document to a model and asks for a summary. When the
 documents conflict, the model silently picks one — and the conflict, which was the most
@@ -240,22 +239,3 @@ report.summary()    # independence ratio, dropped quotes, why it stopped
 report.disputed     # where sources conflict, with both figures and both citations
 report.findings     # where they agree, with confidence from corroboration
 ```
-
-## Problems hit while building this
-
-**Consensus preferred the higher of two disagreeing sources.** Taking `ordered[n // 2]`
-as the median works on odd counts and silently picks the upper value on even ones — so
-with exactly two sources reporting 8.2% and 12.4%, the "consensus" was 12.4%. A bias
-dressed up as a tie-break, and the sort of thing that would never be noticed in a report.
-*Fixed* with `statistics.median`, which averages the middle pair, and that is now a test.
-
-**Counting sources was counting copies.** The first version reported "corroborated by 4
-sources" for a wire story that Reuters wrote and three other sites republished verbatim.
-The confidence figure was fabricated. *Fixed* by collapsing near-duplicates with hashed
-word-shingles **before** anything is counted, and by extracting claims from the group's
-representative only — extracting from every copy would manufacture exactly the
-corroboration deduplication just removed.
-
-**The planner only searched for confirmation.** Decomposing a question into sub-queries
-naturally produces queries that look for supporting evidence, which is how an agent
-concludes whatever it started with. *Fixed* by always appending a contrary query.
