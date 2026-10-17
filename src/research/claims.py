@@ -26,11 +26,14 @@ from dataclasses import dataclass, field
 # "inflation was 8.2%", "GDP grew by 3.4 percent", "the population is 240 million"
 _NUMERIC = re.compile(
     r"(?P<subject>[A-Za-z][\w\s\-']{2,60}?)\s+"
-    r"(?:is|was|were|are|reached|rose to|fell to|grew by|stands at|hit)\s+"
+    r"(?:(?:is|was|were|are)(?:\s+estimated\s+at)?|reached|rose to|fell to|grew by|"
+    r"stands at|stood at|averaged|peaked at|climbed to|dropped to|declined to|"
+    r"increased to|decreased to|amounted to|hit)\s+"
     r"(?:about\s+|around\s+|roughly\s+|approximately\s+)?"
+    r"(?P<currency>\$|US\$|USD\s?|PKR\s?|Rs\.?\s?)?"
     r"(?P<value>-?\d[\d,]*\.?\d*)\s*"
     r"(?P<unit>%|percent|per cent|million|billion|trillion|thousand|"
-    r"kg|km|tonnes?|tons?|years?|days?|USD|PKR|\$)?",
+    r"kg|km|tonnes?|tons?|years?|days?|TWh|GWh|GW|MW|kW|USD|PKR|\$)?",
     re.I,
 )
 
@@ -70,6 +73,28 @@ _STOPWORDS = {
     "her",
     "it",
     "they",
+    # Pronouns and question words carry no subject. "There were 33.7 million" and "there
+    # were 207.7 million" are about different things, and matching them on "there" would
+    # report a dispute between two unrelated sentences.
+    "there",
+    "here",
+    "which",
+    "what",
+    "who",
+    "whom",
+    "whose",
+    "where",
+    "when",
+    "we",
+    "you",
+    "he",
+    "she",
+    "i",
+    # A conjunction left over from a clause split ("..., and is home to 10.5%") is not a
+    # subject either.
+    "and",
+    "but",
+    "or",
 }
 
 
@@ -106,7 +131,10 @@ class Claim:
 
 
 def _sentences(text: str) -> list[str]:
-    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+    # A line break ends a sentence too: headings, list items and table cells on fetched
+    # pages carry no full stop, and without this a heading becomes the subject of the
+    # first claim in the paragraph below it.
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+|\s*\n\s*", text) if s.strip()]
 
 
 def extract(text: str, *, source_url: str = "") -> list[Claim]:
@@ -119,6 +147,11 @@ def extract(text: str, *, source_url: str = "") -> list[Claim]:
             if not subject:
                 continue
             unit = (match.group("unit") or "").lower()
+            if not unit and match.group("currency"):
+                # "$410" and "410 USD" are the same claim; "$410 billion" keeps the
+                # scale as its unit so it compares with "410,000 million".
+                unit = match.group("currency").strip().rstrip(".").lower()
+                unit = {"us$": "$", "usd": "$", "rs": "pkr"}.get(unit, unit)
             unit = {"percent": "%", "per cent": "%"}.get(unit, unit)
             try:
                 value = float(match.group("value").replace(",", ""))

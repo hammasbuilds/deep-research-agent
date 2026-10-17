@@ -1,0 +1,48 @@
+{
+  "samples": [
+    {
+      "id": "solar",
+      "name": "Solar capacity (offline)",
+      "note": "Six short pages written for this demo, on reserved example domains: not real publications. Two are the same wire story, and the sources disagree on one figure.",
+      "question": "How much solar capacity was installed globally by 2024?",
+      "sources": [
+        {
+          "url": "https://wire.example.com/solar-record",
+          "text": "Global installed solar capacity reached 2100 GW in 2024. Solar's share of world electricity was 6.9 percent last year. Analysts expect continued growth through the decade."
+        },
+        {
+          "url": "https://news-aggregator.example.net/solar-record",
+          "text": "Global installed solar capacity reached 2100 GW in 2024. Solar's share of world electricity was 6.9 percent last year. Analysts expect continued growth through the decade. (Wire)"
+        },
+        {
+          "url": "https://energy-agency.example.org/solar-2024",
+          "text": "Global installed solar capacity reached 2050 GW in 2024. Solar's share of world electricity was 7.1 percent last year. Growth was concentrated in Asia."
+        },
+        {
+          "url": "https://solar-notes.blogspot.example/revision",
+          "text": "Global installed solar capacity reached 1600 GW in 2024. Earlier estimates overstated commissioning dates."
+        },
+        {
+          "url": "https://renewables-institute.example.org/statistics",
+          "text": "Global installed solar capacity reached 2080 GW in 2024. Solar's share of world electricity was 7.0 percent last year. Figures are provisional pending audit."
+        },
+        {
+          "url": "https://grid-weekly.example.com/storage",
+          "text": "Battery storage additions were 170 GW in 2024. Grid operators reported record curtailment in spring."
+        }
+      ]
+    },
+    {
+      "id": "live",
+      "name": "Population of Pakistan (live pages)",
+      "note": "Four Wikipedia pages fetched live when you press Research, so this one needs an internet connection and its answer follows the pages as they are today.",
+      "question": "What is the population of Pakistan?",
+      "sources": [
+        {"url": "https://en.wikipedia.org/wiki/2023_Pakistani_census", "text": ""},
+        {"url": "https://en.wikipedia.org/wiki/Demographics_of_Pakistan", "text": ""},
+        {"url": "https://simple.wikipedia.org/wiki/Pakistan", "text": ""},
+        {"url": "https://en.wikipedia.org/wiki/Pakistan", "text": ""}
+      ]
+    }
+  ]
+}

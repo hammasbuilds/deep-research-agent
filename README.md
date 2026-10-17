@@ -1,230 +1,89 @@
-<h1 align="center">deep-research-agent (Python · source dedup · claim verification)</h1>
-<p align="center"><i>A research agent that tells you when the sources disagree, instead of picking one</i></p>
+# deep-research-agent
 
-<p align="center">
-  <a href="#what-it-does">Three things</a> &middot;
-  <a href="#the-budget-is-outside-the-loop">The budget</a> &middot;
-  <a href="#source-authority">Source authority</a> &middot;
-  <a href="#usage">Usage</a> &middot;
-  <a href="#limits">Limits</a> 
-</p>
+[![ci](https://github.com/hammasbuilds/deep-research-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/hammasbuilds/deep-research-agent/actions/workflows/ci.yml)
+![python](https://img.shields.io/badge/python-3.10%2B-blue)
+![deps](https://img.shields.io/badge/runtime%20deps-zero-success)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-<p align="center">
-  <a href="https://github.com/hammasbuilds/deep-research-agent/actions/workflows/ci.yml"><img src="https://github.com/hammasbuilds/deep-research-agent/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
-  <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="python">
-  <img src="https://img.shields.io/badge/core%20deps-zero-success" alt="deps">
-  <img src="https://img.shields.io/badge/testable-no%20network%2C%20no%20model-informational" alt="tested">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
-</p>
-
----
+We built deep-research-agent, a research agent that tells you when its sources disagree
+instead of quietly picking one. It plans queries (always including a contrary one), reads the
+sources under a budget it cannot reason past, merges republished copies so one wire story is
+not counted as ten sources, matches claims across sources, and checks every quote against the
+text it came from. It ships with a small web page: ask a question, give it sources (pasted,
+uploaded or fetched live from a URL) and read each claim with its sources and whether it is
+corroborated or disputed. It is for anyone who needs research they can check, and for
+developers who want a research loop that is testable with no network and no model.
 
 ## What it does
 
-```mermaid
-flowchart LR
-    P["plan"] --> S["search"]
-    S --> F["fetch"]
-    F --> D["deduplicate"]
-    D --> C["corroborate<br/>across sources"]
-    C --> V{"do the sources<br/>agree?"}
-    V -->|"yes"| R["report the finding"]
-    V -->|"no"| DIS["report the DISAGREEMENT"]
-    B["budget"] -.->|"enforced outside the loop"| S
+- **Plans** queries from the question, always adding a contrary-evidence query.
+- **Searches and fetches** through functions you inject (`search(query, limit)`,
+  `fetch(url)`), so any search API or a local index works, and the whole agent runs in tests
+  with neither.
+- **Merges copies** with hashed word shingles before counting anything; the copy from the most
+  authoritative domain represents the group. A long sentence repeated word for word on two
+  otherwise different pages also counts once.
+- **Extracts claims**: numbers ("X was 8.2 percent", "reached 2100 GW", "estimated at $410
+  billion") and stances ("X is not Y"), each with the whole sentence as its quote.
+- **Corroborates**: figures within a tolerance agree (8.2% and 8.4%), figures further apart are
+  **disputed** (8.2% and 12.4%) with both sides and both citations kept; the consensus is the
+  median. Confidence comes from the number of independent sources: single-source,
+  corroborated (2), well-corroborated (3+), or disputed.
+- **Verifies every quote** against the fetched text (whitespace-insensitive, otherwise exact)
+  and drops and counts any that are not found.
+- **Ranks findings** by how much of the question they are about.
+- **Stops** on a query, fetch or time budget enforced outside the loop, or as soon as it has
+  enough corroborated evidence, and says which.
+- **Web page** (`run.bat` or `python -m research.web`): question, sources (paste, upload
+  `.txt`/`.md`/`.html`, or a URL fetched live), two sample sets, filters, a sources table that
+  says what happened to each source, light and dark themes, works on a phone.
 
-    style DIS fill:#f59e0b,color:#fff
-    style B fill:#dc2626,color:#fff
-```
+## Screenshots
 
-**The budget sits outside the loop**, so the agent cannot reason its way past it. And when
-sources conflict, the disagreement *is* the output - most research agents silently pick one.
+![The ask page with the offline sample loaded](docs/screenshots/01-ask.png)
 
-Search and fetch are injected, so the whole pipeline is testable **with no network and no
-model**.
+Input: the "Solar capacity (offline)" sample, six short pages written for the demo on reserved
+`example` domains. Output: the question and each source, ready to run.
 
+![The report: one disputed figure with four citations](docs/screenshots/02-disputed.png)
 
-### 1. Ten sources is not ten sources
+Input: the same six pages. Output: six pages read as five independent sources (two were the
+same wire story), installed capacity **disputed** at 1600 / 2050 / 2080 / 2100 GW (spread 27%)
+with each quote verified in its source, and solar's share of electricity well-corroborated at
+6.9 / 7 / 7.1%.
 
-A wire story is republished verbatim by dozens of outlets. An agent that counts URLs
-reports *"corroborated by 12 sources"* about a claim with exactly one origin — and the
-confidence it reports is **fabricated**.
+![The report on four live Wikipedia pages](docs/screenshots/03-live-pages.png)
 
-Near-duplicates are collapsed *before* anything is counted, using hashed word-shingles,
-and the unit of corroboration is an independent source:
+Input: "What is the population of Pakistan?" with four Wikipedia addresses and no text, so the
+pages are fetched live (2026-10-17). Output: 504 claims from four independent sources, 273 of
+them about the question; the top ones are the census figures with their sentences (61.18%
+rural, 213,222,917 in 2017).
 
-```
-5 documents fetched  →  3 independent sources  (independence ratio 0.6)
-reuters.com ........... copies_found: 3   ← dawn.com and a blogspot mirror
-```
+![The report on a 390 px phone in dark mode](docs/screenshots/04-phone-dark.png)
 
-The **highest-authority** copy represents its group, not the first one seen. If a wire
-story appears on both the agency and an aggregator, the agency is what gets cited — the
-order results arrived in is not evidence about anything.
+Input: the offline sample on a 390 px wide screen in dark mode. Output: the same disputed figure,
+laid out in one column.
 
-Claims are extracted from the representative only. Extracting from every copy would let
-one story contribute the same claim a dozen times and manufacture exactly the
-corroboration deduplication just removed. That's a test.
+## Sample input / output
 
-### 2. Disagreement is reported, not resolved
-
-A typical agent feeds every document to a model and asks for a summary. When the
-documents conflict, the model silently picks one — and the conflict, which was the most
-useful thing the research turned up, disappears.
-
-```python
-report.disputed
-# [{"subject": "Inflation in Pakistan",
-#   "values": [8.2, 12.4], "spread": 0.41, "confidence": "disputed",
-#   "citations": [{"source": "reuters.com/a",    "quote": "...was 8.2 percent..."},
-#                 {"source": "worldbank.org/d",  "quote": "...was 12.4 percent..."}]}]
-```
-
-Agreement is separated from dispute in the report, and confidence comes from
-**corroboration count, not tone**:
-
-| | |
-|---|---|
-| `disputed` | sources conflict — capped regardless of how many are on each side |
-| `well-corroborated` | 3+ independent sources |
-| `corroborated` | 2 |
-| `single-source` | 1 |
-
-Ordinary measurement variation is *not* a contradiction — 8.2% and 8.4% corroborate each
-other; 8.2% and 12.4% do not. The tolerance is explicit and tested both ways.
-
-Consensus is the **median**, and on an even count `statistics.median` averages the middle
-pair. Taking `ordered[n // 2]` would silently prefer the higher of two disagreeing
-sources — a bias dressed up as a tie-break. That was a real bug here.
-
-### 3. Every quote is verified against the fetched text
-
-```python
-def test_a_fabricated_quote_is_rejected():
-    """A citation the agent wrote from memory is worse than no citation,
-    because it looks like evidence."""
-```
-
-Whitespace-insensitive, otherwise **exact**. A near-miss is a miss — a fuzzy threshold is
-precisely where fabricated quotes slip through. Dropped quotes are counted in the report
-rather than hidden.
-
-## The budget is outside the loop
-
-Research is unbounded by nature: there is always one more source. So the stopping
-condition comes from somewhere the agent cannot influence — queries, fetches, wall clock.
-
-It also **stops when it has enough**. Research that can't stop once the question is
-answered is as broken as research that can't stop at all:
+`python demo.py`, five pages written in the script (no network, no model):
 
 ```
-"stopped_because": "found enough corroborated evidence"
-"stopped_because": "fetches budget exhausted: 20 of 20"
+OUTPUT
+   5 pages -> 4 independent sources
+      merged as one: news-a.example, news-b.example  (same text, republished)
+   independence ratio 80%  (4 of 5 documents)
+
+   DISAGREEMENT   Global installed solar capacity
+      consensus   2080   spread 27.0%
+          2100 gw   https://news-a.example/solar
+          2100 gw   https://news-b.example/solar
+          2050 gw   https://energy-agency.example.org/solar
+          1600 gw   https://contrarian.example/solar
+          2080 gw   https://renewables-institute.example.org/solar
 ```
 
-And planning always includes a **contrary query**. An agent that only searches for
-confirmation will find it.
-
-## Usage
-
-```python
-agent = ResearchAgent(search=my_search, fetch=my_fetch, min_authority=0.6)
-report = agent.run("What is inflation in Pakistan?")
-
-report.summary()
-# {"findings": 2, "disputed": 1,
-#  "independent_sources": 3, "documents_fetched": 5, "independence_ratio": 0.6,
-#  "unverified_quotes_dropped": 0,
-#  "stopped_because": "found enough corroborated evidence"}
-```
-
-`search(query, limit) -> [url]` and `fetch(url) -> Source` are yours. Plug in Tavily,
-Brave, SerpAPI or a local index — the agent does not know or care, which is why it can be
-tested exhaustively without one.
-
----
-
-## Input
-
-![input](docs/images/input.png)
-
-## Output
-
-`python demo.py`
-
-![output](docs/images/output.png)
-
-*Two of the five pages are the same wire story. Counted naively that is three sites
-agreeing on 2100 GW; after deduplication it is one source, and the independence ratio
-drops to 80%.*
-
-*The 1600 GW figure is not dropped for being the minority view. The finding is returned
-as a disagreement with a 27% spread, because a user asking this question is far better
-served by "the sources do not agree" than by a confident single number.*
-
----
-
-## Source authority
-
-A coarse prior on reliability, from the domain: primary research → official → established
-press → reference → commercial → user-generated. Deliberately coarse, because a finer
-taxonomy would imply precision this heuristic does not have.
-
-**It is a weight on evidence, never a substitute for checking it.** A high-authority
-source saying something no other source says is still a single unverified claim, and the
-report says so.
-
-## Tests
-
-**48 tests. No network, no API key, no model.**
-
-| Covered | |
-|---|---|
-| Authority | five domain classes, research outranks blogs, unknown domains untrusted |
-| Deduplication | copies collapse, highest-authority representative, distinct docs stay apart, independence ratio, shingling edges |
-| Extraction | numeric claims, unit scaling (2 billion = 2000 million), comma parsing, negation, whole-sentence quotes |
-| Corroboration | agreement, dispute, measurement variation ≠ contradiction, **median consensus**, opposing stances, disputes sort first |
-| Planning | contrary query always present, quantitative and comparative shapes, dedup and cap |
-| Verification | exact match, whitespace tolerance, **fabricated quote rejected**, near-miss is a miss |
-| Agent | agreement/dispute separated, **copies do not corroborate**, query and fetch budgets, early stop, dead links, authority floor, empty results |
-
-## Limits
-
-- **Claim extraction is pattern-based.** It catches numeric and simple assertional
-  claims and little else. That is a real ceiling on recall — but it is deterministic,
-  inspectable, and it means the corroboration logic is verifiable without an API key. A
-  model-based extractor fits behind the same `Claim` interface.
-- Contradiction detection is numeric and stance-based. Two sources disagreeing about
-  *causation* in prose will not be caught.
-- Deduplication is lexical. A story rewritten in different words reads as independent
-  when it is not — the hardest case, and it needs semantics.
-- Domain authority is a heuristic, not a reputation system, and it encodes assumptions
-  worth arguing with.
-- No synthesis prose. The report is structured findings with citations; turning that
-  into readable narrative is a model's job, and it should be given *verified* findings
-  rather than raw documents.
-
-## Keywords
-
-research agent &middot; deep research &middot; multi-source corroboration &middot; source conflict detection &middot; citation verification &middot; deduplication &middot; budget enforcement &middot; agent loops &middot; dependency injection &middot; testable agents &middot; httpx &middot; zero dependencies &middot; LLM agents &middot; information retrieval
-
-## License
-
-MIT
-
----
-
-## Run it yourself
-
-```bash
-git clone https://github.com/hammasbuilds/deep-research-agent
-cd deep-research-agent
-
-pip install -e .         # core has zero dependencies
-pytest -q                # 48 tests, no network, no API key, no model
-```
-
-Search and fetch are injected, so the whole agent runs against anything — Tavily, Brave,
-SerpAPI, or a local index:
+As a library:
 
 ```python
 from research import ResearchAgent, Source
@@ -235,7 +94,59 @@ def fetch(url):            return Source(url=url, text=download(url))
 agent = ResearchAgent(search=search, fetch=fetch, min_authority=0.6)
 report = agent.run("What is inflation in Pakistan?")
 
-report.summary()    # independence ratio, dropped quotes, why it stopped
-report.disputed     # where sources conflict, with both figures and both citations
-report.findings     # where they agree, with confidence from corroboration
+report.summary()
+# {"findings": 2, "disputed": 1, "independent_sources": 3, "documents_fetched": 5,
+#  "independence_ratio": 0.6, "unverified_quotes_dropped": 0,
+#  "stopped_because": "found enough corroborated evidence"}
+report.disputed   # both figures, the spread and a citation for each side
+report.findings   # agreements, with confidence from corroboration and a relevance score
 ```
+
+## Results
+
+- 80 tests, no network, no API key, no model: authority classes, deduplication (copies collapse,
+  the highest-authority copy represents the group, copied sentences count once), extraction
+  (units, currency, commas, negation, line breaks, pronoun subjects), corroboration (agreement,
+  dispute, tolerance, median consensus), planning, quote verification (a fabricated quote is
+  rejected, a near miss is a miss), budgets and early stopping, and the web server (request
+  checks, live fetch with a stub, every endpoint over HTTP).
+- On the four live Wikipedia pages above, deduplication of whole pages found nothing to merge
+  (4 of 4 independent), while 14 sentences repeated word for word between an article and its
+  sub-articles (in 10 claims) were each counted once; before this, those claims were reported
+  as corroborated by two sources.
+
+## Tech stack
+
+- Python 3.10+, zero runtime dependencies
+- Standard library only: `re`, `hashlib` (blake2b shingles), `statistics`, `dataclasses`
+- Web page: `http.server`, `urllib` for live fetches, `html.parser` for page text; vanilla
+  HTML, CSS and JavaScript with no build step
+- Optional extra `web` (`httpx`) for your own fetch function
+- pytest, ruff, hatchling; GitHub Actions on Python 3.10 to 3.13
+
+## Run it
+
+```bash
+git clone https://github.com/hammasbuilds/deep-research-agent
+cd deep-research-agent
+
+pip install -e .         # no dependencies
+pytest -q                # 80 tests
+python demo.py
+
+python -m research.web --port 8845          # then open http://127.0.0.1:8845/
+```
+
+On Windows, `run.bat` starts the page (with `uv`): `run.bat --port 8845 --no-browser`.
+
+- Search on the page runs over the sources you give it; it does not search the web. A source
+  given only as a web address is fetched live (up to 3 MB, 15 s).
+- Claim extraction uses sentence patterns, so a figure stated another way ("with a population of
+  over 241 million") is not picked up; a model-based extractor can sit behind the same `Claim`
+  interface.
+- Domain authority is a coarse prior (primary research, official, press, reference, industry,
+  commercial, user-generated, unknown); it orders sources and never makes a claim true.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). The live sample reads Wikipedia pages, whose text is CC BY-SA 4.0.

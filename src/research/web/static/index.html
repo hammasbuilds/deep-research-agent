@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deep Research Agent</title>
+<meta name="description" content="Ask a question, give it sources, and see each claim with its sources and whether the sources agree or disagree.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5bd3'/%3E%3Cpath d='M9 22l5-12 4 8 2-4 3 8' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-row">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <h1>Deep Research Agent</h1>
+        <p class="tag">Each claim with its sources, and where the sources disagree</p>
+      </div>
+    </div>
+    <nav class="top-actions">
+      <a href="#about" class="link">About</a>
+      <button type="button" id="theme" class="ghost" aria-label="Switch colour theme">Theme: auto</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="panel" aria-labelledby="ask-h">
+    <h2 id="ask-h">Ask</h2>
+    <form id="ask" autocomplete="off">
+      <label for="question" class="lbl">Question</label>
+      <input id="question" name="question" type="text" maxlength="500" placeholder="e.g. What was inflation in Pakistan in 2024?">
+
+      <div class="samples">
+        <span class="lbl-inline">Try a sample:</span>
+        <span id="sample-buttons"></span>
+      </div>
+      <p id="sample-note" class="note" hidden></p>
+
+      <div class="sources-head">
+        <h3>Sources <span id="source-count" class="count"></span></h3>
+        <div class="src-actions">
+          <button type="button" id="add-source" class="ghost">Add a source</button>
+          <label class="ghost file-btn" for="upload">Upload files</label>
+          <input id="upload" type="file" multiple accept=".txt,.md,.html,.htm,text/plain,text/html" hidden>
+          <button type="button" id="clear-sources" class="ghost">Clear</button>
+        </div>
+      </div>
+      <p class="hint">For each source give a web address, a name, or both with its text. A web address with no text is fetched live when you press Research. Paste text to use exactly what you have.</p>
+      <ol id="sources" class="sources"></ol>
+
+      <details class="settings">
+        <summary>Settings</summary>
+        <div class="settings-grid">
+          <label>Lowest source authority to read
+            <select id="min-authority">
+              <option value="0">any source (0)</option>
+              <option value="0.3">unknown and above (0.3)</option>
+              <option value="0.35">commercial and above (0.35)</option>
+              <option value="0.55">industry and above (0.55)</option>
+              <option value="0.75">press and above (0.75)</option>
+            </select>
+          </label>
+          <label>Numbers agree within
+            <select id="tolerance">
+              <option value="0.05">5%</option>
+              <option value="0.1" selected>10%</option>
+              <option value="0.2">20%</option>
+            </select>
+          </label>
+          <label>Most pages to read
+            <input id="max-fetches" type="number" min="1" max="30" value="20">
+          </label>
+        </div>
+      </details>
+
+      <div class="go-row">
+        <button type="submit" id="go" class="primary">Research</button>
+        <span id="status" class="status" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+  </section>
+
+  <section id="results" class="results" hidden aria-labelledby="res-h">
+    <h2 id="res-h">Report</h2>
+    <p id="res-question" class="res-question"></p>
+    <div id="tiles" class="tiles"></div>
+    <p id="stopped" class="note"></p>
+
+    <div id="disputed-wrap">
+      <h3>Where the sources disagree <span id="disputed-count" class="count"></span></h3>
+      <div id="disputed" class="cards"></div>
+    </div>
+
+    <div class="findings-head">
+      <h3>Claims <span id="findings-count" class="count"></span></h3>
+      <div class="filters">
+        <label><input type="checkbox" id="only-relevant" checked> About the question only</label>
+        <label><input type="checkbox" id="only-numbers"> Numbers only</label>
+        <label><input type="checkbox" id="only-corroborated"> Two or more sources</label>
+      </div>
+    </div>
+    <div id="findings" class="cards"></div>
+    <button type="button" id="more" class="ghost more" hidden>Show more</button>
+
+    <h3>Sources read</h3>
+    <div class="table-wrap">
+      <table class="src-table">
+        <thead><tr><th>Source</th><th>What happened</th><th>Authority</th><th>Copies merged into it</th></tr></thead>
+        <tbody id="src-rows"></tbody>
+      </table>
+    </div>
+    <details class="queries">
+      <summary>Queries the agent planned</summary>
+      <ol id="queries"></ol>
+    </details>
+  </section>
+
+  <section id="about" class="panel about" aria-labelledby="about-h">
+    <h2 id="about-h">About</h2>
+    <p>This page runs the <a href="https://github.com/hammasbuilds/deep-research-agent">deep-research-agent</a> library on the sources you give it. The agent plans queries (always including one looking for contrary evidence), searches your sources, reads them, merges republished copies, pulls out claims, matches claims across sources and checks every quote against the text it was read from.</p>
+    <dl class="defs">
+      <dt><span class="badge disputed">disputed</span></dt><dd>Sources give figures more than the tolerance apart, or one says a thing is and another says it is not. Both sides are shown; no winner is picked.</dd>
+      <dt><span class="badge well">well-corroborated</span></dt><dd>Three or more independent sources agree.</dd>
+      <dt><span class="badge corr">corroborated</span></dt><dd>Two independent sources agree.</dd>
+      <dt><span class="badge single">single-source</span></dt><dd>Only one source says it.</dd>
+      <dt><span class="badge ok">quote verified</span></dt><dd>The quoted sentence was found in the text of that source. A claim whose quote is not found is dropped and counted.</dd>
+    </dl>
+    <p>Copies of the same story count once: the copy from the most authoritative domain represents the group. Authority is a coarse prior from the domain (research, official, press, reference, industry, commercial, user-generated, unknown); it orders sources, it does not make a claim true.</p>
+    <p>Claims are found by sentence patterns such as "X was 8.2 percent" or "X is not Y", so prose that states a number another way is not picked up. Search runs over the sources you supply; it does not search the web.</p>
+  </section>
+</main>
+
+<footer class="foot wrap">
+  <span>deep-research-agent &middot; MIT licence</span>
+</footer>
+
+<template id="source-tpl">
+  <li class="source">
+    <div class="source-row">
+      <input class="src-url" type="text" placeholder="https://... or a name for pasted text" aria-label="Source address or name">
+      <button type="button" class="ghost src-remove" aria-label="Remove this source">Remove</button>
+    </div>
+    <textarea class="src-text" rows="3" placeholder="Paste the text here, or leave empty to fetch the address live" aria-label="Source text"></textarea>
+  </li>
+</template>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

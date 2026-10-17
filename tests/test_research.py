@@ -15,6 +15,7 @@ from research.agent import (
     BudgetExhausted,
     ResearchAgent,
     plan,
+    relevance,
     verify_quote,
 )
 from research.claims import corroborate, extract
@@ -320,3 +321,74 @@ class TestBudget:
 
     def test_remaining_is_reported(self):
         assert Budget(max_fetches=20).remaining()["fetches"] == 20
+
+
+class TestRealPageText:
+    """Fetched pages are not tidy prose: headings without full stops, pronoun subjects,
+    currency before the number, and many claims that are not about the question."""
+
+    def test_a_line_break_ends_a_sentence(self):
+        claims = extract("Population\nThe population was 241.49 million.")
+        assert [c.subject for c in claims] == ["population"]
+        assert claims[0].quote == "The population was 241.49 million."
+
+    def test_a_pronoun_is_not_a_subject(self):
+        """Two 'there were N' sentences are about different things; matched on
+        'there', they would be reported as a dispute."""
+        a = extract("There were 33.7 million in 1951.", source_url="a")
+        b = extract("There were 207.7 million in 2017.", source_url="b")
+        assert a == [] and b == []
+        assert not any(f.contradiction for f in corroborate(a + b))
+
+    def test_a_leading_currency_is_read(self):
+        claim = extract("Economic output was estimated at $410 billion in 2025.")[0]
+        assert (claim.value, claim.unit) == (410.0, "billion")
+        assert claim.subject == "economic output"
+
+    def test_past_tense_measurement_verbs_are_read(self):
+        assert extract("Exports stood at 31.2 billion.")[0].value == 31.2
+        assert extract("Inflation averaged 9.5 percent.")[0].unit == "%"
+
+    def test_relevance_is_the_share_of_question_words_present(self):
+        assert relevance("What is inflation in Pakistan?", "Inflation in Pakistan was 8%") == 1.0
+        assert relevance("What is inflation in Pakistan?", "Cotton output fell") == 0.0
+        assert relevance("What is inflation in Pakistan?", "Pakistan's cotton") == 0.5
+        assert relevance("What is it?", "anything") == 0.0
+
+    def test_findings_about_the_question_come_first(self):
+        report = agent().run("How large was the cotton output?")
+        assert report.findings[0]["subject"].lower().startswith("cotton output")
+        scores = [f["relevance"] for f in report.findings]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_a_long_sentence_copied_onto_another_page_counts_once(self):
+        """Two pages too different for document deduplication can still share a
+        paragraph; that shared sentence is one source's evidence, not two."""
+        shared = (
+            "Pakistan is the world's fifth most populous country and has the second "
+            "largest Muslim population as of 2023."
+        )
+        docs = {
+            "https://en.example.org/pakistan": shared + " Its capital is Islamabad. " * 20,
+            "https://en.example.org/demographics": shared + " Urdu is spoken widely. " * 20,
+        }
+        report = ResearchAgent(
+            search=lambda q, n: list(docs)[:n],
+            fetch=lambda u: Source(url=u, text=docs[u]),
+        ).run("What is the population of Pakistan?")
+        finding = next(f for f in report.findings if "populous" in f["citations"][0]["quote"])
+        assert finding["independent_sources"] == 1
+        assert finding["confidence"] == "single-source"
+        assert finding["copied_sentences"] == 1
+
+    def test_short_identical_sentences_stay_independent(self):
+        report = agent().run("What is cotton output?")
+        assert report.independence["independent_sources"] == 3
+        cotton = next(
+            f for f in report.findings if f["subject"].lower().startswith("cotton output")
+        )
+        assert cotton["copied_sentences"] == 0
+
+    def test_power_units_are_kept(self):
+        claim = extract("Global installed solar capacity reached 2100 GW in 2024.")[0]
+        assert (claim.value, claim.unit) == (2100.0, "gw")

@@ -1,4 +1,12 @@
-from .agent import Budget, BudgetExhausted, Report, ResearchAgent, plan, verify_quote
+from .agent import (
+    Budget,
+    BudgetExhausted,
+    Report,
+    ResearchAgent,
+    plan,
+    relevance,
+    verify_quote,
+)
 from .claims import Claim, Finding, corroborate, extract
 from .sources import Source, deduplicate, domain_authority, independence, jaccard, shingles
 
@@ -19,6 +27,7 @@ __all__ = [
     "independence",
     "jaccard",
     "plan",
+    "relevance",
     "shingles",
     "verify_quote",
 ]

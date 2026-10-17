@@ -18,6 +18,7 @@ evidence.
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -96,6 +97,62 @@ def plan(question: str, *, max_queries: int = 6) -> list[str]:
         if q not in seen:
             seen.append(q)
     return seen[:max_queries]
+
+
+_QUESTION_WORDS = {
+    "a", "about", "an", "and", "are", "as", "at", "be", "by", "can", "did", "do", "does",
+    "for", "from", "has", "have", "how", "in", "is", "it", "its", "many", "much", "of", "on",
+    "or", "than", "that", "the", "their", "there", "this", "to", "was", "were", "what",
+    "when", "where", "which", "who", "why", "will", "with",
+}  # fmt: skip
+
+
+def _terms(text: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    # A light plural fold, so "prices" in a question matches "price" in a source.
+    return {w[:-1] if len(w) > 3 and w.endswith("s") else w for w in words}
+
+
+def relevance(question: str, text: str) -> float:
+    """The share of the question's content words that appear in `text`.
+
+    A fetched page states many things, and most of them are not what was asked. This
+    ranks findings by how much of the question they are about; it is a ranking, not a
+    verdict, and nothing is dropped because of it.
+    """
+    wanted = _terms(question) - _QUESTION_WORDS
+    if not wanted:
+        return 0.0
+    return round(len(wanted & _terms(text)) / len(wanted), 4)
+
+
+#: A sentence this long found word for word on two pages was copied, not written twice.
+COPIED_SENTENCE_WORDS = 12
+
+
+def _independent_support(claims: list[Claim]) -> tuple[set[str], int]:
+    """The sources that independently support a finding, and how many were copies.
+
+    Whole-document deduplication misses pages that share one paragraph and differ
+    everywhere else (an encyclopedia article and its sub-article, a press release quoted
+    in full). A long sentence repeated word for word is one source's sentence, so only
+    the first page carrying it counts. Short sentences ("Inflation was 8.2 percent.")
+    can be written independently and are not merged.
+    """
+    supporting: set[str] = set()
+    seen: set[str] = set()
+    copied = 0
+    for claim in claims:
+        words = re.findall(r"[a-z0-9]+", claim.quote.lower())
+        if len(words) >= COPIED_SENTENCE_WORDS:
+            text = " ".join(words)
+            if text in seen:
+                if claim.source_url not in supporting:
+                    copied += 1
+                continue
+            seen.add(text)
+        supporting.add(claim.source_url)
+    return supporting, copied
 
 
 def verify_quote(quote: str, source_text: str) -> bool:
@@ -220,6 +277,7 @@ class ResearchAgent:
         findings = corroborate(claims, numeric_tolerance=self.numeric_tolerance)
 
         verified: list[Finding] = []
+        copies: dict[int, int] = {}
         dropped = 0
         for finding in findings:
             kept = []
@@ -231,11 +289,21 @@ class ResearchAgent:
                     dropped += 1
             if kept:
                 finding.claims = kept
-                finding.supporting_sources = {c.source_url for c in kept}
+                finding.supporting_sources, copied = _independent_support(kept)
+                copies[id(finding)] = copied
                 verified.append(finding)
 
-        report.findings = [f.summary() for f in verified if not f.contradiction]
-        report.disputed = [f.summary() for f in verified if f.contradiction]
+        summaries = []
+        for f in verified:
+            summary = f.summary()
+            about = " ".join([f.subject] + [c.quote for c in f.claims])
+            summary["relevance"] = relevance(question, about)
+            summary["copied_sentences"] = copies.get(id(f), 0)
+            summaries.append((f, summary))
+        # Most relevant first; sorted() is stable, so ties keep corroboration order.
+        summaries.sort(key=lambda pair: -pair[1]["relevance"])
+        report.findings = [s for f, s in summaries if not f.contradiction]
+        report.disputed = [s for f, s in summaries if f.contradiction]
         report.sources = [
             {
                 "url": g.representative.url,

@@ -10,7 +10,8 @@ Two failures that a research agent has to survive, shown together:
   2. Sources disagree. An agent that picks one and reports it confidently has
      destroyed the only information the user needed.
 
-No network, no model: the fetched pages are written here so deduplication
+No network, no model: the fetched pages are written here (not real publications,
+on reserved example domains) so deduplication
 and corroboration can be watched on their own.
 """
 
@@ -42,16 +43,16 @@ INDEPENDENT = (
 SOURCES = [
     Source(url="https://news-a.example/solar", title="Solar record", text=WIRE),
     Source(url="https://news-b.example/solar", title="Solar record", text=WIRE_REPRINT),
-    Source(url="https://iea.org/reports/solar", title="IEA", text=AGENCY),
+    Source(url="https://energy-agency.example.org/solar", title="Agency", text=AGENCY),
     Source(url="https://contrarian.example/solar", title="Revision", text=DISSENT),
-    Source(url="https://irena.org/solar", title="IRENA", text=INDEPENDENT),
+    Source(url="https://renewables-institute.example.org/solar", title="Institute", text=INDEPENDENT),
 ]
 
 print("INPUT")
 print("   question: how much solar capacity was installed globally by 2024?")
 print(f"   {len(SOURCES)} fetched pages:")
 for s in SOURCES:
-    print(f"      {s.domain:24} {s.text[:54]}...")
+    print(f"      {s.domain:34} {s.text[:54]}...")
 print()
 
 groups = deduplicate(SOURCES)
